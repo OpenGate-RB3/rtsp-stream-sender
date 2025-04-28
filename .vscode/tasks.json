@@ -1,0 +1,256 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "qvsce-flash",
+      "type": "shell",
+      "command": "cd ${command:qvsce.getProjectSdkBuildPath} && ${command:qvsce.getUtilityScriptFolder}/adbSwitchEdl.sh ${command:qvsce.getSelectedDeviceAdbId} && ${command:qvsce.getUtilityScriptFolder}/../tools/qdl/QDL_Linux_x64/qdl --debug --storage ufs  --erase-partition 0,1,2,4,5 prog_firehose_ddr.elf rawprogram*.xml patch*.xml",
+      "presentation": {
+        "reveal": "silent",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": true,
+        "clear": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "qvsce-build",
+      "type": "shell",
+      "command": "unset LD_LIBRARY_PATH && source ${command:qvsce.getProjectSdkInstallationPath}/environment-setup-armv8-2a-qcom-linux && make",
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": true,
+        "clear": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "qvsce-build-debug",
+      "type": "shell",
+      "command": "unset LD_LIBRARY_PATH && source ${command:qvsce.getProjectSdkInstallationPath}/environment-setup-armv8-2a-qcom-linux && make build-debug",
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": true,
+        "clear": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "qvsce-deploy",
+      "type": "shell",
+      "command": "unset LD_LIBRARY_PATH && source ${command:qvsce.getProjectSdkInstallationPath}/environment-setup-armv8-2a-qcom-linux &&  make deploy DEPLOYER=\"${command:qvsce.getUtilityScriptFolder}/adbPushToDevice.sh\" ADB_ID=${command:qvsce.getSelectedDeviceAdbId}",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": "$msCompile",
+      "dependsOn": [
+        "qvsce-build",
+        "qvsce-stop"
+      ]
+    },
+    {
+      "label": "qvsce-deploy-ssh",
+      "type": "shell",
+      "command": "ssh -o StrictHostKeyChecking=no -i ${config:qvsce.sshPrivateKeyPath} root@${command:qvsce.getSelectedDeviceIpAddress} \"setenforce 0 ; mount -o remount,rw /usr\" ;scp -i ${config:qvsce.sshPrivateKeyPath} gst-open-gate-rtsp-sender  root@${command:qvsce.getSelectedDeviceIpAddress}:/usr/bin/gst-open-gate-rtsp-sender",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": "$msCompile",
+      "dependsOn": [
+        "qvsce-build",
+        "qvsce-stop-ssh"
+      ]
+    },
+    {
+      "label": "qvsce-deploy-debug",
+      "type": "shell",
+      "command": "unset LD_LIBRARY_PATH && source ${command:qvsce.getProjectSdkInstallationPath}/environment-setup-armv8-2a-qcom-linux &&  make deploy DEPLOYER=\"${command:qvsce.getUtilityScriptFolder}/adbPushToDevice.sh\" ADB_ID=${command:qvsce.getSelectedDeviceAdbId}",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": "$msCompile",
+      "dependsOn": [
+        "qvsce-build-debug",
+        "qvsce-stop"
+      ]
+    },
+    {
+      "label": "qvsce-deploy-debug-ssh",
+      "type": "shell",
+      "command": "ssh -o StrictHostKeyChecking=no -i ${config:qvsce.sshPrivateKeyPath} root@${command:qvsce.getSelectedDeviceIpAddress} \"setenforce 0 ; mount -o remount,rw /usr\" ;scp -i ${config:qvsce.sshPrivateKeyPath} gst-open-gate-rtsp-sender  root@${command:qvsce.getSelectedDeviceIpAddress}:/usr/bin/gst-open-gate-rtsp-sender",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": "$msCompile",
+      "dependsOn": [
+        "qvsce-build-debug"
+      ]
+    },
+    {
+      "label": "qvsce-run",
+      "type": "shell",
+      "command": "adb -s ${command:qvsce.getSelectedDeviceAdbId} shell 'mount -o remount,rw / && export GST_DEBUG=2' && make run ADB_ID=${command:qvsce.getSelectedDeviceAdbId}",
+      "presentation": {
+        "reveal": "always",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "dependsOn": [
+        "qvsce-deploy",
+        "qvsce-stop"
+      ]
+    },
+    {
+      "label": "qvsce-run-ssh",
+      "type": "shell",
+      "command": "ssh -o StrictHostKeyChecking=no -i ${config:qvsce.sshPrivateKeyPath} root@${command:qvsce.getSelectedDeviceIpAddress} \"setenforce 0 ;export XDG_RUNTIME_DIR=/dev/socket/weston ; export WAYLAND_DISPLAY=wayland-1 ; export GST_DEBUG=2 ; /usr/bin/gst-open-gate-rtsp-sender \" ",
+      "presentation": {
+        "reveal": "always",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "dependsOn": [
+        "qvsce-deploy-ssh",
+        "qvsce-stop-ssh"
+      ]
+    },
+    {
+      "label": "qvsce-preset",
+      "type": "shell",
+      "command": "rm -rf GA_rel_models; unset LD_LIBRARY_PATH && source ${command:qvsce.getProjectSdkInstallationPath}/environment_setup-armv8-2a-qcom-linux && \"${command:qvsce.getUtilityScriptFolder}/download_artifacts.sh\" -o GA_rel_models  && \"${command:qvsce.getUtilityScriptFolder}/adbPushToDevice.sh\" ${command:qvsce.getSelectedDeviceAdbId} \"GA_rel_models\"/* /opt",
+      "presentation": {
+        "reveal": "always",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "dependsOn": [
+        "qvsce-preset-gst-sample-utility"
+      ]
+    },
+    {
+      "label": "qvsce-preset-ssh",
+      "type": "shell",
+      "command": "rm -rf GA_rel_models; unset LD_LIBRARY_PATH && source ${command:qvsce.getProjectSdkInstallationPath}/environment-setup-armv8-2a-qcom-linux && \"${command:qvsce.getUtilityScriptFolder}/download_artifacts.sh\" -o GA_rel_models  && ssh -o StrictHostKeyChecking=no -i ${config:qvsce.sshPrivateKeyPath} root@${command:qvsce.getSelectedDeviceIpAddress} 'setenforce 0 ; mount -o remount,rw / ; mkdir -p /opt' ; scp -i ${config:qvsce.sshPrivateKeyPath} GA_rel_models/* root@${command:qvsce.getSelectedDeviceIpAddress}:/opt/",
+      "presentation": {
+        "reveal": "always",
+        "echo": true,
+        "focus": true,
+        "showReuseMessage": false,
+        "clear": true
+      }
+    },
+    {
+      "label": "qvsce-stop",
+      "type": "shell",
+      "command": "make stop ADB_ID=${command:qvsce.getSelectedDeviceAdbId}",
+      "presentation": {
+        "reveal": "never",
+        "echo": true,
+        "panel": "dedicated",
+        "focus": false,
+        "showReuseMessage": false,
+        "clear": false,
+        "close": true
+      }
+    },
+    {
+      "label": "qvsce-stop-ssh",
+      "type": "shell",
+      "command": "ssh -o StrictHostKeyChecking=no -i ${config:qvsce.sshPrivateKeyPath} root@${command:qvsce.getSelectedDeviceIpAddress} \"killall gst-open-gate-rtsp-sender\"",
+      "presentation": {
+        "reveal": "never",
+        "echo": true,
+        "panel": "dedicated",
+        "focus": false,
+        "showReuseMessage": false,
+        "clear": false,
+        "close": true
+      }
+    },
+    {
+      "label": "qvsce-start-gdb-server",
+      "type": "shell",
+      "isBackground": true,
+      "command": "make debug ADB_ID=${command:qvsce.getSelectedDeviceAdbId}",
+      "dependsOn": [
+        "qvsce-deploy-debug"
+      ],
+      "problemMatcher": [
+        {
+          "pattern": [
+            {
+              "regexp": ".",
+              "file": 1,
+              "location": 2,
+              "message": 3
+            }
+          ],
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": ".",
+            "endsPattern": "."
+          }
+        }
+      ]
+    },
+    {
+      "label": "qvsce-start-gdb-server-ssh",
+      "type": "shell",
+      "isBackground": true,
+      "command": "ssh -i ${config:qvsce.sshPrivateKeyPath} root@${command:qvsce.getSelectedDeviceIpAddress} \"export XDG_RUNTIME_DIR=/dev/socket/weston ; export WAYLAND_DISPLAY=wayland-1 ; export GST_DEBUG=2 ; gdbserver:1235 /usr/bin/gst-open-gate-rtsp-sender \"",
+      "dependsOn": [
+        "qvsce-deploy-debug-ssh"
+      ],
+      "problemMatcher": [
+        {
+          "pattern": [
+            {
+              "regexp": ".",
+              "file": 1,
+              "location": 2,
+              "message": 3
+            }
+          ],
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": ".",
+            "endsPattern": "."
+          }
+        }
+      ]
+    }
+  ]
+}

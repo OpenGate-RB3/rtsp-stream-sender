@@ -1,0 +1,33 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${command:qvsce.getProjectSdkToolchainPath}/usr/include/gstreamer-1.0/**",
+                "${command:qvsce.getProjectSdkToolchainPath}/usr/include/**",
+                "${command:qvsce.getProjectSdkToolchainPath}/usr/lib/glib-2.0/**",
+                "${command:qvsce.getProjectSdkToolchainPath}/usr/include/gstreamer-1.0/**",
+                "${command:qvsce.getProjectSdkInstallationPath}/workspace/sources/qcom-gst-sample-apps-utils"
+            ],
+            "defines": [],
+            "cStandard": "gnu17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-arm64",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "${command:qvsce.getProjectSdkToolchainPath}/usr/include/gstreamer-1.0/**",
+                    "${command:qvsce.getProjectSdkToolchainPath}/usr/include",
+                    "${command:qvsce.getProjectSdkToolchainPath}/usr/lib/glib-2.0/**",
+                    "${command:qvsce.getProjectSdkToolchainPath}/usr/include/gstreamer-1.0/**",
+                    "${command:qvsce.getProjectSdkInstallationPath}/workspace/sources/qcom-gst-sample-apps-utils"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db"
+            },
+            "configurationProvider": "ms-vscode.makefile-tools"
+        }
+    ],
+    "version": 4
+}

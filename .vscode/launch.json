@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "DEBUG-ADB",
+      "isQCExtensionCreatedWorkspace": true,
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/gst-open-gate-rtsp-sender",
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "${command:qvsce.getProjectSdkDebuggerPath}",
+      "miDebuggerServerAddress": ":1234",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set library path",
+          "text": "-gdb-set sysroot ${command:qvsce.getProjectSdkToolchainPath}",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "qvsce-start-gdb-server"
+    },
+    {
+      "name": "DEBUG-SSH",
+      "isQCExtensionCreatedWorkspace": true,
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/gst-open-gate-rtsp-sender",
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "${command:qvsce.getProjectSdkDebuggerPath}",
+      "miDebuggerServerAddress": "${command:qvsce.getSelectedDeviceIpAddress}:1235",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set library path",
+          "text": "-gdb-set sysroot ${command:qvsce.getProjectSdkToolchainPath}",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "qvsce-start-gdb-server-ssh"
+    }
+  ]
+}

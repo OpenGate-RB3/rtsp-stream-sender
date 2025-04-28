@@ -1,0 +1,163 @@
+{
+  "Ubuntu_20": {
+    "vscode": {
+      "installHostDependencies": {
+        "_comments_y": "Please refer to the format from SDK setup, the dependencies here are complimentary dependencies"
+      },
+      "installWorkspaceConfiguration": [
+        {
+          "command": "pwd",
+          "name": "Show PWD",
+          "sequence": -1,
+          "type": "shell"
+        },
+        {
+          "command": "basename $(pwd) | tr -d '\n'",
+          "name": "Get app name",
+          "sequence": 0.1,
+          "target": "$APP_NAME",
+          "type": "shellOutput"
+        },
+        {
+          "command": "#getSdkBuildArtifactPath#",
+          "name": "Get the sdk build artifact path",
+          "sequence": 0.5,
+          "target": "$SDK_BA_PATH",
+          "type": "qideExec"
+        },
+        {
+          "command": "cd \"$SDK_BA_PATH\" && unset LD_LIBRARY_PATH && source ./environment-setup-armv8-2a-qcom-linux &> /dev/null  && echo -n $SDKTARGETSYSROOT",
+          "name": "Get build toolchain root",
+          "sequence": 0.6,
+          "target": "$SDK_BA_TC_PATH",
+          "type": "shellOutput"
+        },
+        {
+          "command": "cd \"$SDK_BA_PATH\" && unset LD_LIBRARY_PATH &&  source ./environment-setup-armv8-2a-qcom-linux &> /dev/null  && which aarch64-qcom-linux-gdb | tr -d '\n'",
+          "name": "Get debugger file path",
+          "sequence": 0.7,
+          "target": "$SDK_BA_DBG_PATH",
+          "type": "shellOutput"
+        },
+        {
+          "command": "#getSdkQualcommLinuxBinaryPath#",
+          "name": "Get the flat build path",
+          "sequence": 0.8,
+          "target": "$SDK_QCLINUX_PATH",
+          "type": "qideExec"
+        },
+        {
+          "command": "#getutilityscriptfolder#",
+          "name": "Get the flat build path",
+          "sequence": 0.85,
+          "target": "$SDK_SCRIPT_UTILITY_PATH",
+          "type": "qideExec"
+        },
+        {
+          "command": "#getProductResourceFolder#",
+          "name": "Get the utility script path",
+          "options": {
+            "product": "qcm6490"
+          },
+          "sequence": 0.9,
+          "target": "$PRODUCT_RESOURCE_PATH",
+          "type": "qideExec"
+        },
+        {
+          "command": "cp -arfv \"$PRODUCT_RESOURCE_PATH/multimedia/ESDK/c_cpp/Makefile\" .",
+          "name": "Create Makefile",
+          "sequence": 1,
+          "type": "shell"
+        },
+        {
+          "command": "mkdir -p ./.vscode && cp -rfv \"$PRODUCT_RESOURCE_PATH/multimedia/ESDK/c_cpp/.vscode/\"* ./.vscode",
+          "name": "Copy .vscode contents",
+          "sequence": 1.1,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_app_name>|$APP_NAME|g\" ./Makefile",
+          "name": "Replace binary name for Makefile",
+          "sequence": 2,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_sdk_path>|$SDK_BA_PATH|g\" ./Makefile",
+          "name": "Replace binary name for Makefile",
+          "sequence": 2.1,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_utility_script_path>|$SDK_SCRIPT_UTILITY_PATH|g\" ./.vscode/tasks.json",
+          "name": "Replace sdk path for task.json",
+          "sequence": 2.3,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_app_name>|$APP_NAME|g\" ./.vscode/tasks.json",
+          "name": "Replace binary name for launch.json",
+          "sequence": 2.4,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_app_name>|$APP_NAME|g\" ./.vscode/launch.json",
+          "name": "Replace binary name for launch.json",
+          "sequence": 3,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_sdk_toolchain_path>|$SDK_BA_TC_PATH|g\" ./.vscode/launch.json",
+          "name": "Replace sdk tool chain path for launch.json",
+          "sequence": 3.1,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_debugger_path>|$SDK_BA_DBG_PATH|g\" ./.vscode/launch.json",
+          "name": "Replace debugger path for launch.json",
+          "sequence": 3.2,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_sdk_path>|$SDK_BA_PATH|g\" ./.vscode/tasks.json",
+          "name": "Replace sdk path for task.json",
+          "sequence": 4,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_flat_build_path>|$SDK_QCLINUX_PATH|g\" ./.vscode/tasks.json",
+          "name": "Replace flat build image path for task.json",
+          "sequence": 4.1,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_sdk_path>|$SDK_BA_PATH|g\" ./.vscode/c_cpp_properties.json",
+          "name": "Replace sdk tool chain path for c_cpp_properties.json",
+          "sequence": 5,
+          "type": "shell"
+        },
+        {
+          "command": "sed -i \"s|<replace_here_with_sdk_toolchain_path>|$SDK_BA_TC_PATH|g\" ./.vscode/c_cpp_properties.json",
+          "name": "Replace sdk tool chain path for c_cpp_properties.json",
+          "sequence": 5.1,
+          "type": "shell"
+        },
+        {
+          "name": "Notify script pass",
+          "command": "echo -e \"\\033[0;32mConfig Workspace Successfully\\033[0m\"",
+          "target": "$QIM_SUPPORT_PATH",
+          "type": "shell",
+          "sequence": 10
+        },
+        {
+          "command": "#getString#",
+          "name": "Notify succeed",
+          "sequence": 50,
+          "target": "TRUE",
+          "type": "qideReturn"
+        }
+      ],
+      "configurableSdk": "QIM ESDK QCM6490 Core Development Kit,QIM ESDK QCM6490 Vision Development Kit",
+      "requiredSdk": "QIMPSDK VISION"
+    }
+  }
+}
