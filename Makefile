@@ -21,6 +21,7 @@ TARGETS = $(foreach n,$(SOURCES),$(basename $(n)))
 
 LLIBS    += -lgstreamer-1.0 -lgobject-2.0 -lglib-2.0
 
+STDSET = -std=c++17
 
 # CXX = aarch64-qcom-linux-g++
 
@@ -30,11 +31,11 @@ all: ${TARGETS}
 
 ${TARGETS}: %:%.cc
 # $(CXX) -Wall --sysroot=$(SDKTARGETSYSROOT) $(INCLUDES) $(LLIBS) $< -o $(GST_APP_NAME)
-	$(CXX) -Wall $(INCLUDES) $(LLIBS) $< -o $(GST_APP_NAME)
+	$(CXX) $(STDSET) -Wall  $(INCLUDES) $(LLIBS) $< -o $(GST_APP_NAME)
 
 build-debug:
 # $(CXX) -Wall -g --sysroot=$(SDKTARGETSYSROOT) $(INCLUDES) $(LLIBS) $(SOURCES) -o $(GST_APP_NAME)
-	$(CXX) $(CXXFLAGS) -Wall -g $(INCLUDES) $(LLIBS) $(SOURCES) -o $(GST_APP_NAME)
+	$(CXX) $(CXXFLAGS) $(STDSET) -Wall -g $(INCLUDES) $(LLIBS) $(SOURCES) -o $(GST_APP_NAME)
 
 deploy:
 	$(DEPLOYER) ${ADB_ID} ${GST_APP_NAME} $(DEPLOY_DIR)
