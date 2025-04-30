@@ -21,7 +21,7 @@ void parse_args(const int argc, char **argv) {
     program.add_argument("-ai_udp").help("specify if you want gstreamer to dump video data over udp instead of appsink").default_value(false).implicit_value(true);
     program.add_argument("-ai_port").help("-ai_port [port] if -ai_udp is present a port needs to be provided");
     program.add_argument("-ai_ip").help("ipaddress of the udp socket to send over");
-    program.add_epilog("The program ships with defaults for most of these paramater and their providing is only need if configuration of the system is non-default");
+    program.add_epilog("The program ships with defaults for most of these parameter and their providing is only need if configuration of the system is non-default");
     try {
         program.parse_args(argc, argv);
         // load app context here
