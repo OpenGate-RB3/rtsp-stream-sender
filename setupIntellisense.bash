@@ -6,7 +6,9 @@ if [[ -z "$1" ]]; then
 fi
 
 git update-index --assume-unchanged ./.vscode/c_cpp_properties.json
+git update-index --assume-unchanged ./Makefile
 
 source $1/environment-setup-armv8-2a-qcom-linux # needed since we need some vars
 
 sed -i "s#\${command:qvsce.getProjectSdkToolchainPath}#${SDKTARGETSYSROOT}#g" ./.vscode/c_cpp_properties.json
+sed -i "s#\${SDKTARGETSYSROOT}#${SDKTARGETSYSROOT}#g" ./Makefile
