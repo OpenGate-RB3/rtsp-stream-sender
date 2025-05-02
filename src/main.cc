@@ -51,7 +51,7 @@ bool setup_pipline(appContext::context & cxt) {
     // audio pipeline
     GstElement *pulsesrc, *audioconvert, *voaacenc, *rtpmp4apay, *udpsinkAudio; // audio pipeline --> audio src --> convert to mpeg4 --> rtp packetize --> rtpbin --> udpsink
     // ai pipeline
-    GstElement *queue_ai, *videoconvert, *appsink, *ai_udpSink; // video src --> convert to rgb raw --> appsink || udpsink
+    GstElement *queue_ai, *videoconvert_ai, *ai_udpSink; // video src --> convert to rgb raw --> appsink || udpsink
     // RTSP  specif stuff
     GstElement *rtpbin;
     // RTCP protocol stuff
@@ -90,6 +90,7 @@ bool setup_pipline(appContext::context & cxt) {
     udpsrc_rtcp_audio = gst_element_factory_make("udpsrc", "udpsrc_rtcp_audio");
     // ai sinks
     ai_udpSink = gst_element_factory_make("ai_udp", "ai_udp");
+    videoconvert_ai = gst_element_factory_make("videoconvert", "videoconvert_ai");
     // check if components were correctly made
     if (!qtiqmfsrc
         || !capsfilter
@@ -102,6 +103,7 @@ bool setup_pipline(appContext::context & cxt) {
         || !rtph264pay
         || !pulsesrc
         || !audioconvert
+        || !videoconvert_ai
         || !voaacenc
         || !rtpmp4apay
         || !rtpbin
@@ -144,7 +146,29 @@ bool setup_pipline(appContext::context & cxt) {
     g_object_set(G_OBJECT(rtpmp4apay),"pt",97,NULL);
 
     // udp set up
-    g_object_set(G_OBJECT(udpsinkVideo),"host",cxt.ip_address.c_str(),"port",cxt.,NULL);
+    g_object_set(G_OBJECT(udpsinkVideo),"host",cxt.ip_address.c_str(),"port",cxt.video_port,NULL);
+    g_object_set(G_OBJECT(udpsinkAudio),"host",cxt.ip_address,"port",cxt.audio_port,NULL);
+
+    // RTCP sinks
+    g_object_set(G_OBJECT(udpsink_rtcp_video),"host",cxt.ip_address,"port",cxt.video_rtcp_port,NULL);
+    g_object_set(G_OBJECT(udpsink_rtcp_audio),"host", cxt.ip_address,"port",cxt.audio_rtcp_port,NULL);
+
+    // RTCP sources
+    g_object_set(G_OBJECT(udpsrc_rtcp_video), "port", 5005, NULL);
+    g_object_set(G_OBJECT(udpsink_rtcp_audio), "port", 5007, NULL);
+
+    // Add to pipeline, this is huge block of items
+    // this really does not matter, linking is what actually dictates how data flows
+    gst_bin_add_many(GST_BIN(cxt.pipeline),
+        qtiqmfsrc,capsfilter,tee,queue_stream,
+        queue_ai, videoconvert_ai,voaacenc,
+        capsfilter_rgb,v4l2h264enc,h264parse,
+        rtph264pay,pulsesrc,audioconvert,
+        rtpmp4apay,rtpbin,udpsinkVideo,udpsinkAudio,
+        ai_udpSink, udpsink_rtcp_audio, udpsink_rtcp_video,
+        udpsrc_rtcp_video, udpsrc_rtcp_audio, NULL
+    );
+    // start linking Elements together
     return true;
 }
 
