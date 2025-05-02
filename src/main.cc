@@ -196,10 +196,27 @@ bool setup_pipline(appContext::context & cxt) {
 
     // link main elements together
     gst_element_link_many(qtiqmfsrc,capsfilter,tee,NULL);
+    // link queues to tee
+    GstPad * tee_src_pad = gst_element_request_pad_simple (tee,"src_%u");
+    GstPad * queue_dest = gst_element_get_static_pad(queue_ai, "sink");
+    gst_pad_link(tee_src_pad,queue_dest);
+    gst_object_unref(queue_dest);
+    gst_object_unref(tee_src_pad);
+    tee_src_pad = gst_element_request_pad_simple (tee,"src_%u");
+    queue_dest = gst_element_get_static_pad(queue_stream, "sink");
+    gst_pad_link(tee_src_pad,queue_dest);
+    gst_object_unref(queue_dest);
+    gst_object_unref(tee_src_pad);
 
     // link AI branch to main elements
-    gst_element_link_many(tee,queue_ai,videorate_ai,capsfilter_rate_limit,
-        videoconvert_ai,capsfilter_rgb, jpegenc, rtpjpeg ,ai_udpSink,NULL);
+    gst_element_link_many(queue_ai,videorate_ai,capsfilter_rate_limit,
+        videoconvert_ai,capsfilter_rgb, jpegenc, rtpjpeg,NULL);
+
+    // link videostream pipeline
+    gst_element_link_many(queue_stream,v4l2h264enc,h264parse,rtph264pay, NULL);
+
+    // link audio to pipeline
+    gst_element_link_many(pulsesrc,audioconvert,voaacenc,rtpmp4apay,NULL);
 
     return true;
 }
