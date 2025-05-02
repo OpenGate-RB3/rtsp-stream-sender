@@ -7,6 +7,8 @@ namespace appContext{
         int audio_port;
         int video_rtcp_port;
         int audio_rtcp_port;
+        int video_rtcp_receive_port;
+        int audio_rtcp_receive_port;
         int width;
         int height;
         std::string format;
@@ -15,5 +17,6 @@ namespace appContext{
         std::string ai_ip_address; // if udp the ip to send over
         // in future maybe add encoding option
         GstElement *pipeline;
+        std::vector<GstElement *> elements;
     };
 }
