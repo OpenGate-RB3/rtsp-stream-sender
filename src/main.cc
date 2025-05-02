@@ -53,6 +53,7 @@ void parse_args(const int argc, char **argv) {
 }
 
 bool setup_pipline(appContext::context & cxt) {
+    // todo likely add error checking on gstreamer functions beyond line 140
     // top level
     GstElement *qtiqmfsrc, *capsfilter, *tee, *capsfilter_rgb, *capsfilter_rate_limit;
     // video pipeline
@@ -335,5 +336,6 @@ int main(int argc, char *argv[]) {
         gst_object_unref(cxt.pipeline);
         return 1;
     }
+    // todo set up gstreamer main loop and bus watching
     return 0;
 }
