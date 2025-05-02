@@ -45,29 +45,31 @@ void parse_args(const int argc, char **argv) {
 
 bool setup_pipline(appContext::context & cxt) {
     // top level
-    GstElement *qtiqmfsrc, *capsfilter, *tee, *capsfilter_rgb;
+    GstElement *qtiqmfsrc, *capsfilter, *tee, *capsfilter_rgb, *capsfilter_rate_limit;
     // video pipeline
     GstElement *queue_stream, *v4l2h264enc, *h264parse, *rtph264pay, *udpsinkVideo; // video pipeline --> encode into h264 --> send to rtph264pay --> rtpbin --> udpsink
     // audio pipeline
     GstElement *pulsesrc, *audioconvert, *voaacenc, *rtpmp4apay, *udpsinkAudio; // audio pipeline --> audio src --> convert to mpeg4 --> rtp packetize --> rtpbin --> udpsink
     // ai pipeline
-    GstElement *queue_ai, *videoconvert_ai, *ai_udpSink; // video src --> convert to rgb raw --> appsink || udpsink
+    GstElement *queue_ai, *videoconvert_ai, *jpegenc, *rtpjpeg , *ai_udpSink; // video src --> convert to rgb raw --> jpeg --> rtp --> udp
     // RTSP  specif stuff
     GstElement *rtpbin;
     // RTCP protocol stuff
     GstElement *udpsink_rtcp_video, *udpsink_rtcp_audio;
     GstElement *udpsrc_rtcp_video, *udpsrc_rtcp_audio;
-    //
-    GstCaps *filterscap, *aiCap; // needed to define stream conversions during differnt steps
+    // ratelimit
+    GstElement *videorate_ai;
+    GstCaps *filterscap, *aiCap, *fps_caps; // needed to define stream conversions during differnt steps
 
     // top level components
     qtiqmfsrc = gst_element_factory_make("qtiqmfsrc", "qtiqmmfsrc");
     capsfilter = gst_element_factory_make("capsfilter", "capsfilter");
     tee = gst_element_factory_make("tee", "tee"); // similar to command line utility splits stream
     capsfilter_rgb = gst_element_factory_make("capsfilter", "capsfilterrgb");
+    capsfilter_rate_limit = gst_element_factory_make("capsfilter", "capsfilterratelimit");
     //queues
-    queue_stream = gst_element_factory_make("queue", "queue");
-    queue_ai = gst_element_factory_make("queue", "queueai");
+    queue_stream = gst_element_factory_make("queue", "queue_stream");
+    queue_ai = gst_element_factory_make("queue", "queue_ai");
     //video components
     v4l2h264enc = gst_element_factory_make("v4l2h264enc", "v4l2h264enc");
     h264parse = gst_element_factory_make("h264parse", "h264parse");
@@ -89,13 +91,18 @@ bool setup_pipline(appContext::context & cxt) {
     udpsrc_rtcp_video = gst_element_factory_make("udpsrc", "udpsrc_rtcp_video");
     udpsrc_rtcp_audio = gst_element_factory_make("udpsrc", "udpsrc_rtcp_audio");
     // ai sinks
-    ai_udpSink = gst_element_factory_make("ai_udp", "ai_udp");
+    videorate_ai = gst_element_factory_make("videorate", "videoconvert_ai");
+    ai_udpSink = gst_element_factory_make("udpsink", "ai_udp");
     videoconvert_ai = gst_element_factory_make("videoconvert", "videoconvert_ai");
+    jpegenc = gst_element_factory_make("jpegenc", "jpegenc");
+    rtpjpeg = gst_element_factory_make("rtpjpegpay", "rtpjpeg");
+
     // check if components were correctly made
     if (!qtiqmfsrc
         || !capsfilter
         || !tee
         || !capsfilter_rgb
+        || !capsfilter_rate_limit
         ||!queue_stream
         || !queue_ai
         || !v4l2h264enc
@@ -114,6 +121,9 @@ bool setup_pipline(appContext::context & cxt) {
         || !udpsrc_rtcp_video
         || !udpsrc_rtcp_audio
         || !ai_udpSink
+        || !jpegenc
+        || !rtpjpeg
+        || !videorate_ai
         )
     {
         std::cerr << "Failed to create GstElements" << std::endl;
@@ -132,30 +142,44 @@ bool setup_pipline(appContext::context & cxt) {
         NULL
         );
     aiCap = gst_caps_new_simple("video/x-raw","format", G_TYPE_STRING, cxt.ai_format.c_str(),NULL);
+    fps_caps = gst_caps_new_simple("video/x-raw","framerate", GST_TYPE_FRACTION, 10, 1, NULL);
     // set caps filters for base stream
     g_object_set(G_OBJECT(capsfilter), "caps", filterscap, NULL);
     gst_caps_unref(filterscap);
     // set caps filter for ai stream, ie nv12 to rgb native
     g_object_set(G_OBJECT(capsfilter_rgb), "caps", aiCap, NULL);
     gst_caps_unref(aiCap);
+    g_object_set(G_OBJECT(capsfilter_rate_limit), "caps", fps_caps, NULL);
+    gst_caps_unref(fps_caps);
+
+    // ai rate limit setup
+    g_object_set(videorate_ai, "drop-only", TRUE, NULL);
 
     // Encoder configuration
     g_object_set(G_OBJECT(v4l2h264enc), "capture-io-mode",5,"output-io-mode",5, NULL);
     g_object_set(G_OBJECT(h264parse),"config-interval",-1,NULL);
     g_object_set(G_OBJECT(rtph264pay),"pt",96,NULL);
     g_object_set(G_OBJECT(rtpmp4apay),"pt",97,NULL);
+    g_object_set(G_OBJECT(rtpjpeg), "pt", 26, NULL);
+
 
     // udp set up
     g_object_set(G_OBJECT(udpsinkVideo),"host",cxt.ip_address.c_str(),"port",cxt.video_port,NULL);
     g_object_set(G_OBJECT(udpsinkAudio),"host",cxt.ip_address,"port",cxt.audio_port,NULL);
+    g_object_set(G_OBJECT(ai_udpSink),"host", cxt.ai_ip_address, "port", cxt.ai_port,NULL);
+
 
     // RTCP sinks
-    g_object_set(G_OBJECT(udpsink_rtcp_video),"host",cxt.ip_address,"port",cxt.video_rtcp_port,NULL);
-    g_object_set(G_OBJECT(udpsink_rtcp_audio),"host", cxt.ip_address,"port",cxt.audio_rtcp_port,NULL);
+    g_object_set(G_OBJECT(udpsink_rtcp_video),"host",cxt.ip_address,"port",cxt.video_rtcp_port,
+        "async",FALSE,"sync",FALSE,NULL);
+    g_object_set(G_OBJECT(udpsink_rtcp_audio),"host", cxt.ip_address,"port",cxt.audio_rtcp_port,
+        "async",FALSE,"sync",FALSE,NULL);
+
 
     // RTCP sources
     g_object_set(G_OBJECT(udpsrc_rtcp_video), "port", 5005, NULL);
     g_object_set(G_OBJECT(udpsink_rtcp_audio), "port", 5007, NULL);
+
 
     // Add to pipeline, this is huge block of items
     // this really does not matter, linking is what actually dictates how data flows
@@ -164,11 +188,19 @@ bool setup_pipline(appContext::context & cxt) {
         queue_ai, videoconvert_ai,voaacenc,
         capsfilter_rgb,v4l2h264enc,h264parse,
         rtph264pay,pulsesrc,audioconvert,
-        rtpmp4apay,rtpbin,udpsinkVideo,udpsinkAudio,
+        rtpmp4apay, rtpjpeg,videorate_ai, capsfilter_rate_limit,rtpbin,udpsinkVideo,udpsinkAudio,
         ai_udpSink, udpsink_rtcp_audio, udpsink_rtcp_video,
         udpsrc_rtcp_video, udpsrc_rtcp_audio, NULL
     );
     // start linking Elements together
+
+    // link main elements together
+    gst_element_link_many(qtiqmfsrc,capsfilter,tee,NULL);
+
+    // link AI branch to main elements
+    gst_element_link_many(tee,queue_ai,videorate_ai,capsfilter_rate_limit,
+        videoconvert_ai,capsfilter_rgb, jpegenc, rtpjpeg ,ai_udpSink,NULL);
+
     return true;
 }
 
