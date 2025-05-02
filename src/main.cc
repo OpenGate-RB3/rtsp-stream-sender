@@ -13,7 +13,7 @@ void parse_args(const int argc, char **argv) {
     argparse::ArgumentParser program("gst-open-gate-rtsp-sender",version);
     program.add_description("utility for sending video and audio data over udp to an rtsp endpoint\n");
     program.add_argument("ip").help("ip address of the rtsp server, required and not provided\n");
-    program.add_argument("-port","-p").help("<port1> <port2> port 1 is video track, port 2 is audio track: default is <5000> <5001>").nargs(2).default_value(std::vector<std::string>{"5000","5001"}).scan<'d',int>();
+    program.add_argument("-port","-p").help("<port1> <port2> <port3> <port4> port 1 is video track, port 2 is audio track, port 3 video RTCP, port 4 audio RTCP: default is <5000> <5001> <5002> <5003> ").nargs(4).default_value(std::vector<std::string>{"5000","5001","5002","5003"}).scan<'d',int>();
     program.add_argument("-w","-width").help("width of capture, default: "+std::to_string(DEFAULT_WIDTH)).default_value(std::to_string(DEFAULT_WIDTH)).scan<'d',int>();
     program.add_argument("-h","-height").help("height of capture, default: "+std::to_string(DEFAULT_HEIGHT)).default_value(std::to_string(DEFAULT_HEIGHT)).scan<'d',int>();
     program.add_argument("-raw","-raw_format").help("encoding of stream, default: NV12").default_value(DEFAULT_RAW_FORMAT);
@@ -28,6 +28,8 @@ void parse_args(const int argc, char **argv) {
         const auto ports = program.get<std::vector<int>>("-port");
         cxt.video_port = ports[0];
         cxt.audio_port = ports[1];
+        cxt.video_rtcp_port = ports[2];
+        cxt.audio_rtcp_port = ports[3];
         cxt.width = program.get<int>("-width");
         cxt.height = program.get<int>("-height");
         cxt.format = program.get<std::string>("-raw_format");
@@ -92,6 +94,7 @@ bool setup_pipline(appContext::context & cxt) {
     if (!qtiqmfsrc
         || !capsfilter
         || !tee
+        || !capsfilter_rgb
         ||!queue_stream
         || !queue_ai
         || !v4l2h264enc
@@ -127,12 +130,21 @@ bool setup_pipline(appContext::context & cxt) {
         NULL
         );
     aiCap = gst_caps_new_simple("video/x-raw","format", G_TYPE_STRING, cxt.ai_format.c_str(),NULL);
-
+    // set caps filters for base stream
     g_object_set(G_OBJECT(capsfilter), "caps", filterscap, NULL);
     gst_caps_unref(filterscap);
+    // set caps filter for ai stream, ie nv12 to rgb native
+    g_object_set(G_OBJECT(capsfilter_rgb), "caps", aiCap, NULL);
+    gst_caps_unref(aiCap);
 
-    g_object_set()
+    // Encoder configuration
+    g_object_set(G_OBJECT(v4l2h264enc), "capture-io-mode",5,"output-io-mode",5, NULL);
+    g_object_set(G_OBJECT(h264parse),"config-interval",-1,NULL);
+    g_object_set(G_OBJECT(rtph264pay),"pt",96,NULL);
+    g_object_set(G_OBJECT(rtpmp4apay),"pt",97,NULL);
 
+    // udp set up
+    g_object_set(G_OBJECT(udpsinkVideo),"host",cxt.ip_address.c_str(),"port",cxt.,NULL);
     return true;
 }
 

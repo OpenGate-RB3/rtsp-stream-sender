@@ -5,6 +5,8 @@ namespace appContext{
         std::string ip_address;
         int video_port;
         int audio_port;
+        int video_rtcp_port;
+        int audio_rtcp_port;
         int width;
         int height;
         std::string format;
