@@ -210,7 +210,7 @@ bool setup_pipline(appContext::context & cxt) {
     gst_element_link_many(queue_stream,v4l2h264enc,h264parse,rtph264pay, NULL);
 
     // link audio to pipeline
-    gst_element_link_many(pulsesrc,audioconvert,voaacenc,rtpmp4apay,NULL);
+    gst_element_link_many(pulsesrc,audioCapsFilter,audioconvert,voaacenc,rtpmp4apay,NULL);
 
     // link video and audio streams to rtpcleintsink
     GstPad * video_rtp_sink = gst_element_request_pad_simple (rtpsinkClient, "sink_0");
@@ -267,6 +267,41 @@ bool setup_pipline(appContext::context & cxt) {
     return true;
 }
 
+
+static gboolean bus_call(GstBus * bus, GstMessage * msg, gpointer data) {
+    GMainLoop * loop = (GMainLoop *) data;
+    switch (GST_MESSAGE_TYPE (msg)) {
+        case GST_MESSAGE_ERROR: {
+            GError * error = nullptr;
+            gchar * debug = nullptr;
+            gst_message_parse_error(msg, &error, &debug);
+            std::cerr << "err detected in gstreamer shutting down application: " << error->message << std::endl;
+            g_error_free(error);
+            g_free(debug);
+            g_main_loop_quit (loop);
+            break;
+        }
+        case GST_MESSAGE_WARNING: {
+            GError *err = nullptr;
+            gchar *debug = nullptr;
+            gst_message_parse_warning(msg, &err, &debug);
+            std::cerr << "Warning: " << err->message << std::endl;
+            g_error_free(err);
+            g_free(debug);
+            break;
+        }
+        case GST_MESSAGE_EOS: {
+            std::cout << "EOS received" << std::endl;
+            g_main_loop_quit (loop);
+            break;
+        }
+        default:
+            break;
+    }
+    return TRUE;
+}
+
+
 int main(int argc, char *argv[]) {
     gst_init(&argc, &argv);
     parse_args(argc,argv);
@@ -282,5 +317,26 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     // todo set up gstreamer main loop and bus watching
+    GMainLoop * loop = g_main_loop_new(NULL,FALSE);
+    // Attach a bus to handle messages
+    GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(cxt.pipeline));
+    gst_bus_add_watch(bus, bus_call, loop);
+    gst_object_unref(bus);
+    if (gst_element_set_state(cxt.pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
+        std::cerr << "Failed to set pipeline to PLAYING" << std::endl;
+        gst_object_unref(cxt.pipeline);
+        return 1;
+    }
+    std::cout << "Running pipeline..." << std::endl;
+    g_main_loop_run(loop);
+    // Clean shutdown
+    std::cout << "Stopping pipeline..." << std::endl;
+    gst_element_set_state(cxt.pipeline, GST_STATE_NULL);
+    for (GstElement* elem : cxt.elements) {
+        gst_object_unref(GST_OBJECT(elem));
+    }
+    cxt.elements.clear();
+    gst_object_unref(cxt.pipeline);
+    g_main_loop_unref(loop);
     return 0;
 }
