@@ -5,6 +5,8 @@ namespace appContext{
         std::string url_location;
         int width;
         int height;
+        int fps;
+        int jfps;
         std::string format;
         std::string ai_format;
         std::string ai_location; // rtsp server location for sending the jpeg images over

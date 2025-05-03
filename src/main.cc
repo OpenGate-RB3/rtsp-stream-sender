@@ -12,12 +12,14 @@ appContext::context cxt;
 void parse_args(const int argc, char **argv) {
     argparse::ArgumentParser program("gst-open-gate-rtsp-sender",version);
     program.add_description("utility for sending video and audio data over udp to an rtsp endpoint\n");
-    program.add_argument("location").help("rtsp address where to send the stream, for example rtsp://example:5000");
-    program.add_argument("-w","-width").help("width of capture, default: "+std::to_string(DEFAULT_WIDTH)).default_value(std::to_string(DEFAULT_WIDTH)).scan<'d',int>();
-    program.add_argument("-h","-height").help("height of capture, default: "+std::to_string(DEFAULT_HEIGHT)).default_value(std::to_string(DEFAULT_HEIGHT)).scan<'d',int>();
+    program.add_argument("-location").help("rtsp address where to send the stream, for example rtsp://example:5000").required();
+    program.add_argument("-w","-width").help("width of capture, default: "+std::to_string(DEFAULT_WIDTH)).default_value(DEFAULT_WIDTH).scan<'d',int>();
+    program.add_argument("-h","-height").help("height of capture, default: "+std::to_string(DEFAULT_HEIGHT)).default_value(DEFAULT_HEIGHT).scan<'d',int>();
     program.add_argument("-raw","-raw_format").help("encoding of stream, default: NV12").default_value(DEFAULT_RAW_FORMAT);
     program.add_argument("-ai_raw").help("AI inference stream format, default: RGB").default_value(DEFAULT_AI_RAW_FORMAT);
     program.add_argument("-ai_location").help("location of the rtsp server to send too").required();
+    program.add_argument("-fps").help("frame rate of the camera source").default_value(DEFAULT_FRAMES).scan<'d',int>();
+    program.add_argument("-jpeg_amount","-jfps").help("frame rate of the jpeg stream for ai inference").default_value(DEFAULT_JPEG_RATE).scan<'d',int>();
     program.add_epilog("The program ships with defaults for most of these parameter and their providing is only need if configuration of the system is non-default");
     try {
         program.parse_args(argc, argv);
@@ -29,6 +31,8 @@ void parse_args(const int argc, char **argv) {
         cxt.format = program.get<std::string>("-raw_format");
         cxt.ai_format = program.get<std::string>("-ai_raw");
         cxt.ai_location = program.get<std::string>("-ai_location");
+        cxt.fps = program.get<int>("-fps");
+        cxt.jfps = program.get<int>("-jfps");
     }catch(const std::exception& e) {
         std::cerr << "Error parsing arguments: " << e.what() << std::endl;
         std::cerr << program << std::endl;
@@ -114,14 +118,14 @@ bool setup_pipline(appContext::context & cxt) {
         "format", G_TYPE_STRING, cxt.format.c_str(),
         "width", G_TYPE_INT, cxt.width,
         "height", G_TYPE_INT, cxt.height,
-        "framerate", GST_TYPE_FRACTION, 30, 1,
+        "framerate", GST_TYPE_FRACTION, cxt.fps, 1,
         "compression", G_TYPE_STRING, "ubwc",
         "interlace-mode", G_TYPE_STRING, "progressive",
         "colorimetry", G_TYPE_STRING, "bt601",
         NULL
         );
     aiCap = gst_caps_new_simple("video/x-raw","format", G_TYPE_STRING, cxt.ai_format.c_str(),NULL);
-    fps_caps = gst_caps_new_simple("video/x-raw","framerate", GST_TYPE_FRACTION, 10, 1, NULL);
+    fps_caps = gst_caps_new_simple("video/x-raw","framerate", GST_TYPE_FRACTION, cxt.jfps, 1, NULL);
     audio_caps = gst_caps_new_simple("audio/x-raw",
         "format",G_TYPE_STRING,"S16LE",
         "width", G_TYPE_INT, 16,
