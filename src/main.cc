@@ -12,39 +12,23 @@ appContext::context cxt;
 void parse_args(const int argc, char **argv) {
     argparse::ArgumentParser program("gst-open-gate-rtsp-sender",version);
     program.add_description("utility for sending video and audio data over udp to an rtsp endpoint\n");
-    program.add_argument("ip").help("ip address of the rtsp server, required and not provided\n");
-    program.add_argument("-port","-p").help("<port1> <port2> <port3> <port4> port 1 is video track, port 2 is audio track, port 3 video RTCP, port 4 audio RTCP: default is <5000> <5001> <5002> <5003> ").nargs(4).default_value(std::vector<std::string>{"5000","5001","5002","5003"}).scan<'d',int>();
+    program.add_argument("location").help("rtsp address where to send the stream, for example rtsp://example:5000");
     program.add_argument("-w","-width").help("width of capture, default: "+std::to_string(DEFAULT_WIDTH)).default_value(std::to_string(DEFAULT_WIDTH)).scan<'d',int>();
     program.add_argument("-h","-height").help("height of capture, default: "+std::to_string(DEFAULT_HEIGHT)).default_value(std::to_string(DEFAULT_HEIGHT)).scan<'d',int>();
     program.add_argument("-raw","-raw_format").help("encoding of stream, default: NV12").default_value(DEFAULT_RAW_FORMAT);
     program.add_argument("-ai_raw").help("AI inference stream format, default: RGB").default_value(DEFAULT_AI_RAW_FORMAT);
-    program.add_argument("-ai_port").help("-ai_port <port> a port needs to be provided").required();
-    program.add_argument("-ai_ip").help("ipaddress of the udp socket to send over").required();
-    program.add_argument("-rtcp_port").help("if you want to use a differnt receving port set than the rtcp send ports").nargs(2);
+    program.add_argument("-ai_location").help("location of the rtsp server to send too").required();
     program.add_epilog("The program ships with defaults for most of these parameter and their providing is only need if configuration of the system is non-default");
     try {
         program.parse_args(argc, argv);
         // load app context here
-        cxt.ip_address = program.get<std::string>("ip"); // this is required
+        cxt.url_location = program.get<std::string>("location"); // this is required
         const auto ports = program.get<std::vector<int>>("-port");
-        cxt.video_port = ports[0];
-        cxt.audio_port = ports[1];
-        cxt.video_rtcp_port = ports[2];
-        cxt.audio_rtcp_port = ports[3];
-        if (program.is_used("-rtcp_port")) {
-            const auto rtcp_ports = program.get<std::vector<int>>("-rtcp_port");
-            cxt.video_rtcp_receive_port = rtcp_ports[0];
-            cxt.audio_rtcp_receive_port = rtcp_ports[1];
-        }else {
-            cxt.video_rtcp_receive_port = cxt.video_rtcp_port;
-            cxt.audio_rtcp_receive_port = cxt.audio_rtcp_port;
-        }
         cxt.width = program.get<int>("-width");
         cxt.height = program.get<int>("-height");
         cxt.format = program.get<std::string>("-raw_format");
         cxt.ai_format = program.get<std::string>("-ai_raw");
-        cxt.ai_ip_address = program.get<std::string>("-ai_ip");
-        cxt.ai_port = program.get<int>("-ai_port");
+        cxt.ai_location = program.get<std::string>("-ai_location");
     }catch(const std::exception& e) {
         std::cerr << "Error parsing arguments: " << e.what() << std::endl;
         std::cerr << program << std::endl;
@@ -57,19 +41,16 @@ bool setup_pipline(appContext::context & cxt) {
     // top level
     GstElement *qtiqmfsrc, *capsfilter, *tee, *capsfilter_rgb, *capsfilter_rate_limit;
     // video pipeline
-    GstElement *queue_stream, *v4l2h264enc, *h264parse, *rtph264pay, *udpsinkVideo; // video pipeline --> encode into h264 --> send to rtph264pay --> rtpbin --> udpsink
+    GstElement *queue_stream, *v4l2h264enc, *h264parse, *rtph264pay; // video pipeline --> encode into h264 --> send to rtph264pay --> rtpclientsink
     // audio pipeline
-    GstElement *pulsesrc, *audioconvert, *voaacenc, *rtpmp4apay, *udpsinkAudio; // audio pipeline --> audio src --> convert to mpeg4 --> rtp packetize --> rtpbin --> udpsink
+    GstElement *pulsesrc, *audioCapsFilter , *audioconvert, *voaacenc, *rtpmp4apay; // audio pipeline --> audio src --> convert to mpeg4 --> rtp packetize --> rtpclientsink
     // ai pipeline
-    GstElement *queue_ai, *videoconvert_ai, *jpegenc, *rtpjpeg , *ai_udpSink; // video src --> convert to rgb raw --> jpeg --> rtp --> udp
+    GstElement *queue_ai, *videoconvert_ai, *jpegenc, *rtpjpeg; // video src --> convert to rgb raw --> jpeg --> rtpclientsink
     // RTSP  specif stuff
-    GstElement *rtpbin;
-    // RTCP protocol stuff
-    GstElement *udpsink_rtcp_video, *udpsink_rtcp_audio;
-    GstElement *udpsrc_rtcp_video, *udpsrc_rtcp_audio;
+    GstElement *rtpsinkClient, *rtpsinkClient_ai;
     // ratelimit
     GstElement *videorate_ai;
-    GstCaps *filterscap, *aiCap, *fps_caps; // needed to define stream conversions during differnt steps
+    GstCaps *filterscap, *aiCap, *fps_caps, *audio_caps; // needed to define stream conversions during differnt steps
 
     // top level components
     qtiqmfsrc = gst_element_factory_make("qtiqmfsrc", "qtiqmmfsrc");
@@ -86,25 +67,19 @@ bool setup_pipline(appContext::context & cxt) {
     rtph264pay = gst_element_factory_make("rtph264pay", "rtph264pay");
     // audio components
     pulsesrc = gst_element_factory_make("pulsesrc", "pulsesrc");
+    audioCapsFilter = gst_element_factory_make("capsfilter", "audioCapsFilter");
     audioconvert = gst_element_factory_make("audioconvert", "audioconvert");
     voaacenc = gst_element_factory_make("voaacenc", "voaacenc");
     rtpmp4apay = gst_element_factory_make("rtpmp4apay", "rtpmp4apay");
 
-    // rtpbin
-    rtpbin = gst_element_factory_make("rtpbin", "rtpbin");
-    // udpsink rtsp
-    udpsinkVideo = gst_element_factory_make("udpsink", "udpsink_video");
-    udpsinkAudio = gst_element_factory_make("udpsink", "udpsink_audio");
-    udpsink_rtcp_video = gst_element_factory_make("udpsink", "udpsink_rtcp_video");
-    udpsink_rtcp_audio = gst_element_factory_make("udpsink", "udpsink_rtcp_audio");
-    udpsrc_rtcp_video = gst_element_factory_make("udpsrc", "udpsrc_rtcp_video");
-    udpsrc_rtcp_audio = gst_element_factory_make("udpsrc", "udpsrc_rtcp_audio");
+    // rtpsink client for standar video stream
+    rtpsinkClient = gst_element_factory_make("rtspclientsink", "rtpsink");
     // ai sinks
     videorate_ai = gst_element_factory_make("videorate", "videorate_ai");
-    ai_udpSink = gst_element_factory_make("udpsink", "ai_udp");
     videoconvert_ai = gst_element_factory_make("videoconvert", "videoconvert_ai");
     jpegenc = gst_element_factory_make("jpegenc", "jpegenc");
     rtpjpeg = gst_element_factory_make("rtpjpegpay", "rtpjpeg");
+    rtpsinkClient_ai = gst_element_factory_make("rtspclientsink", "rtpsinkclient_ai");
 
     // check if components were correctly made
     if (   !qtiqmfsrc
@@ -118,18 +93,13 @@ bool setup_pipline(appContext::context & cxt) {
         || !h264parse
         || !rtph264pay
         || !pulsesrc
+        || !audioCapsFilter
         || !audioconvert
         || !videoconvert_ai
         || !voaacenc
         || !rtpmp4apay
-        || !rtpbin
-        || !udpsinkVideo
-        || !udpsinkAudio
-        || !udpsink_rtcp_video
-        || !udpsink_rtcp_audio
-        || !udpsrc_rtcp_video
-        || !udpsrc_rtcp_audio
-        || !ai_udpSink
+        || !rtpsinkClient
+        || !rtpsinkClient_ai
         || !jpegenc
         || !rtpjpeg
         || !videorate_ai
@@ -152,6 +122,12 @@ bool setup_pipline(appContext::context & cxt) {
         );
     aiCap = gst_caps_new_simple("video/x-raw","format", G_TYPE_STRING, cxt.ai_format.c_str(),NULL);
     fps_caps = gst_caps_new_simple("video/x-raw","framerate", GST_TYPE_FRACTION, 10, 1, NULL);
+    audio_caps = gst_caps_new_simple("audio/x-raw",
+        "format",G_TYPE_STRING,"S16LE",
+        "width", G_TYPE_INT, 16,
+        "channels", G_TYPE_INT, 1,
+        "rate", G_TYPE_INT, 48000,
+        NULL); // from qualcomm example, try this an explore later
     // set caps filters for base stream
     g_object_set(G_OBJECT(capsfilter), "caps", filterscap, NULL);
     gst_caps_unref(filterscap);
@@ -160,6 +136,8 @@ bool setup_pipline(appContext::context & cxt) {
     gst_caps_unref(aiCap);
     g_object_set(G_OBJECT(capsfilter_rate_limit), "caps", fps_caps, NULL);
     gst_caps_unref(fps_caps);
+    g_object_set(G_OBJECT(audioCapsFilter),"caps", audio_caps, NULL);
+    gst_caps_unref(audio_caps);
 
     // ai rate limit setup
     g_object_set(videorate_ai, "drop-only", TRUE, NULL);
@@ -167,27 +145,13 @@ bool setup_pipline(appContext::context & cxt) {
     // Encoder configuration
     g_object_set(G_OBJECT(v4l2h264enc), "capture-io-mode",5,"output-io-mode",5, NULL);
     g_object_set(G_OBJECT(h264parse),"config-interval",-1,NULL);
-    g_object_set(G_OBJECT(rtph264pay),"pt",96,NULL);
-    g_object_set(G_OBJECT(rtpmp4apay),"pt",97,NULL);
-    g_object_set(G_OBJECT(rtpjpeg), "pt", 26, NULL);
+    g_object_set(G_OBJECT(rtph264pay),"pt",96,NULL); // h264
+    g_object_set(G_OBJECT(rtpmp4apay),"pt",97,NULL); // mpeg4 (AAC)
+    g_object_set(G_OBJECT(rtpjpeg), "pt", 26, NULL); // jpeg (M-JPEG)
 
-
-    // udp set up
-    g_object_set(G_OBJECT(udpsinkVideo),"host",cxt.ip_address.c_str(),"port",cxt.video_port,NULL);
-    g_object_set(G_OBJECT(udpsinkAudio),"host",cxt.ip_address,"port",cxt.audio_port,NULL);
-    g_object_set(G_OBJECT(ai_udpSink),"host", cxt.ai_ip_address, "port", cxt.ai_port,NULL);
-
-
-    // RTCP sinks
-    g_object_set(G_OBJECT(udpsink_rtcp_video),"host",cxt.ip_address,"port",cxt.video_rtcp_port,
-        "async",FALSE,"sync",FALSE,NULL);
-    g_object_set(G_OBJECT(udpsink_rtcp_audio),"host", cxt.ip_address,"port",cxt.audio_rtcp_port,
-        "async",FALSE,"sync",FALSE,NULL);
-
-
-    // RTCP sources
-    g_object_set(G_OBJECT(udpsrc_rtcp_video), "port", cxt.video_rtcp_receive_port, NULL);
-    g_object_set(G_OBJECT(udpsrc_rtcp_audio), "port", cxt.audio_rtcp_receive_port, NULL);
+    // rtsp setup here
+    g_object_set(G_OBJECT(rtpsinkClient), "location",cxt.url_location,NULL);
+    g_object_set(G_OBJECT(rtpsinkClient_ai),"location", cxt.ai_location,"SYNC",FALSE,NULL);
 
 
     // Add to pipeline, this is huge block of items
@@ -204,31 +168,25 @@ bool setup_pipline(appContext::context & cxt) {
             v4l2h264enc,
             h264parse,
             rtph264pay,
-            udpsinkVideo,
             // Audio pipeline
             pulsesrc,
+            audioCapsFilter,
             audioconvert,
             voaacenc,
             rtpmp4apay,
-            udpsinkAudio,
             // AI pipeline
             queue_ai,
             videoconvert_ai,
             jpegenc,
             rtpjpeg,
-            ai_udpSink,
             // RTSP
-            rtpbin,
-            // RTCP
-            udpsink_rtcp_video,
-            udpsink_rtcp_audio,
-            udpsrc_rtcp_video,
-            udpsrc_rtcp_audio,
+            rtpsinkClient,
+            rtpsinkClient_ai,
             // Ratelimit
             videorate_ai,
             NULL
     );
-    // start linking Elements together
+
 
     // link main elements together
     gst_element_link_many(qtiqmfsrc,capsfilter,tee,NULL);
@@ -246,7 +204,7 @@ bool setup_pipline(appContext::context & cxt) {
 
     // link AI branch to main elements
     gst_element_link_many(queue_ai,videorate_ai,capsfilter_rate_limit,
-        videoconvert_ai,capsfilter_rgb, jpegenc, rtpjpeg,ai_udpSink,NULL);
+        videoconvert_ai,capsfilter_rgb, jpegenc, rtpjpeg,NULL);
 
     // link videostream pipeline
     gst_element_link_many(queue_stream,v4l2h264enc,h264parse,rtph264pay, NULL);
@@ -254,30 +212,24 @@ bool setup_pipline(appContext::context & cxt) {
     // link audio to pipeline
     gst_element_link_many(pulsesrc,audioconvert,voaacenc,rtpmp4apay,NULL);
 
-    // link video and audio streams to rtpbin
-    GstPad * video_rtp_sink = gst_element_request_pad_simple (rtpbin, "send_rtp_sink_0");
+    // link video and audio streams to rtpcleintsink
+    GstPad * video_rtp_sink = gst_element_request_pad_simple (rtpsinkClient, "sink_0");
     GstPad * video_src_pad = gst_element_get_static_pad(rtph264pay, "src");
     gst_pad_link(video_src_pad, video_rtp_sink);
     gst_object_unref(video_rtp_sink);
     gst_object_unref(video_src_pad);
 
-    GstPad * audio_rtp_sink = gst_element_request_pad_simple (rtpbin, "send_rtp_sink_1");
+    GstPad * audio_rtp_sink = gst_element_request_pad_simple (rtpsinkClient, "sink_1");
     GstPad * audio_src_pad = gst_element_get_static_pad (rtpmp4apay, "src");
     gst_pad_link(audio_src_pad, audio_rtp_sink);
     gst_object_unref(audio_rtp_sink);
     gst_object_unref(audio_src_pad);
 
-    // rtp into udp sinks
-    gst_element_link_pads(rtpbin, "send_rtp_src_0", udpsinkVideo, "sink");
-    gst_element_link_pads(rtpbin, "send_rtp_src_1", udpsinkAudio, "sink");
-
-    // rtcp sink (goes to server)
-    gst_element_link_pads(rtpbin, "send_rtcp_src_0", udpsink_rtcp_video, "sink");
-    gst_element_link_pads(rtpbin, "send_rtcp_src_1", udpsink_rtcp_audio, "sink");
-
-    // rtcp recv
-    gst_element_link_pads(udpsrc_rtcp_video, "src", rtpbin, "recv_rtcp_sink_0");
-    gst_element_link_pads(udpsrc_rtcp_audio, "src", rtpbin, "recv_rtcp_sink_1");
+    GstPad * jpeg_rtp_sink = gst_element_request_pad_simple (rtpsinkClient_ai, "sink_0");
+    GstPad * jpeg_rtp_src = gst_element_get_static_pad (rtpjpeg,"src");
+    gst_pad_link(jpeg_rtp_src, jpeg_rtp_sink);
+    gst_object_unref(jpeg_rtp_src);
+    gst_object_unref(jpeg_rtp_sink);
 
     // add items into list for cleanup after application stops
     // Top level elements
@@ -292,30 +244,23 @@ bool setup_pipline(appContext::context & cxt) {
     cxt.elements.push_back(v4l2h264enc);
     cxt.elements.push_back(h264parse);
     cxt.elements.push_back(rtph264pay);
-    cxt.elements.push_back(udpsinkVideo);
 
     // Audio pipeline elements
     cxt.elements.push_back(pulsesrc);
     cxt.elements.push_back(audioconvert);
+    cxt.elements.push_back(audioCapsFilter);
     cxt.elements.push_back(voaacenc);
     cxt.elements.push_back(rtpmp4apay);
-    cxt.elements.push_back(udpsinkAudio);
 
     // AI pipeline elements
     cxt.elements.push_back(queue_ai);
     cxt.elements.push_back(videoconvert_ai);
     cxt.elements.push_back(jpegenc);
     cxt.elements.push_back(rtpjpeg);
-    cxt.elements.push_back(ai_udpSink);
 
     // RTSP elements
-    cxt.elements.push_back(rtpbin);
-
-    // RTCP elements
-    cxt.elements.push_back(udpsink_rtcp_video);
-    cxt.elements.push_back(udpsink_rtcp_audio);
-    cxt.elements.push_back(udpsrc_rtcp_video);
-    cxt.elements.push_back(udpsrc_rtcp_audio);
+    cxt.elements.push_back(rtpsinkClient);
+    cxt.elements.push_back(rtpsinkClient_ai);
 
     // Ratelimit elements
     cxt.elements.push_back(videorate_ai);
