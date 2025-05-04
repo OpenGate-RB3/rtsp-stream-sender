@@ -154,8 +154,8 @@ bool setup_pipline(appContext::context & cxt) {
     g_object_set(G_OBJECT(rtpjpeg), "pt", 26, NULL); // jpeg (M-JPEG)
 
     // rtsp setup here
-    g_object_set(G_OBJECT(rtpsinkClient), "location",cxt.url_location,NULL);
-    g_object_set(G_OBJECT(rtpsinkClient_ai),"location", cxt.ai_location,"SYNC",FALSE,NULL);
+    g_object_set(G_OBJECT(rtpsinkClient), "location",cxt.url_location,"sync",FALSE,"async",FALSE,NULL);
+    g_object_set(G_OBJECT(rtpsinkClient_ai),"location", cxt.ai_location,"sync",FALSE,"async",FALSE,NULL);
 
 
     // Add to pipeline, this is huge block of items
