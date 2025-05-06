@@ -46,7 +46,7 @@ bool setup_pipline(appContext::context & cxt) {
     // video pipeline
     GstElement *queue_stream, *v4l2h264enc, *h264parse, *rtph264pay; // video pipeline --> encode into h264 --> send to rtph264pay --> rtpclientsink
     // audio pipeline
-    GstElement *pulsesrc, *audioCapsFilter , *audioconvert, *voaacenc, *rtpmp4apay; // audio pipeline --> audio src --> convert to mpeg4 --> rtp packetize --> rtpclientsink
+    GstElement *pulsesrc, *audioCapsFilter , *audioconvert, *mp3enc, *rtpmpapay; // audio pipeline --> audio src --> convert to mpeg4 --> rtp packetize --> rtpclientsink
     // ai pipeline
     GstElement *queue_ai, *videoconvert_ai, *jpegenc, *rtpjpeg; // video src --> convert to rgb raw --> jpeg --> rtpclientsink
     // RTSP  specif stuff
@@ -72,8 +72,8 @@ bool setup_pipline(appContext::context & cxt) {
     pulsesrc = gst_element_factory_make("pulsesrc", "pulsesrc");
     audioCapsFilter = gst_element_factory_make("capsfilter", "audioCapsFilter");
     audioconvert = gst_element_factory_make("audioconvert", "audioconvert");
-    voaacenc = gst_element_factory_make("voaacenc", "voaacenc");
-    rtpmp4apay = gst_element_factory_make("rtpmp4apay", "rtpmp4apay");
+    mp3enc = gst_element_factory_make("lamemp3enc", "lamemp3enc");
+    rtpmpapay = gst_element_factory_make("rtpmpapay", "rtpmpapay");
 
     // rtpsink client for standar video stream
     rtpsinkClient = gst_element_factory_make("rtspclientsink", "rtpsink");
@@ -99,8 +99,8 @@ bool setup_pipline(appContext::context & cxt) {
         || !audioCapsFilter
         || !audioconvert
         || !videoconvert_ai
-        || !voaacenc
-        || !rtpmp4apay
+        || !mp3enc
+        || !rtpmpapay
         || !rtpsinkClient
         || !rtpsinkClient_ai
         || !jpegenc
@@ -149,7 +149,7 @@ bool setup_pipline(appContext::context & cxt) {
     g_object_set(G_OBJECT(v4l2h264enc), "capture-io-mode",5,"output-io-mode",5, NULL);
     g_object_set(G_OBJECT(h264parse),"config-interval",-1,NULL);
     g_object_set(G_OBJECT(rtph264pay),"pt",96,NULL); // h264
-    g_object_set(G_OBJECT(rtpmp4apay),"pt",97,NULL); // mpeg4 (AAC)
+    g_object_set(G_OBJECT(rtpmpapay),"pt",14,NULL); // mpeg (mp3)
     g_object_set(G_OBJECT(rtpjpeg), "pt", 26, NULL); // jpeg (M-JPEG)
 
     // rtsp setup here
@@ -175,8 +175,8 @@ bool setup_pipline(appContext::context & cxt) {
             pulsesrc,
             audioCapsFilter,
             audioconvert,
-            voaacenc,
-            rtpmp4apay,
+            mp3enc,
+            rtpmpapay,
             // AI pipeline
             queue_ai,
             videoconvert_ai,
@@ -213,7 +213,7 @@ bool setup_pipline(appContext::context & cxt) {
     gst_element_link_many(queue_stream,v4l2h264enc,h264parse,rtph264pay, NULL);
 
     // link audio to pipeline
-    gst_element_link_many(pulsesrc,audioCapsFilter,audioconvert,voaacenc,rtpmp4apay,NULL);
+    gst_element_link_many(pulsesrc,audioCapsFilter,audioconvert,mp3enc,rtpmpapay,NULL);
 
     // link video and audio streams to rtpcleintsink
     GstPad * video_rtp_sink = gst_element_request_pad_simple (rtpsinkClient, "sink_0");
@@ -223,7 +223,7 @@ bool setup_pipline(appContext::context & cxt) {
     gst_object_unref(video_src_pad);
 
     GstPad * audio_rtp_sink = gst_element_request_pad_simple (rtpsinkClient, "sink_1");
-    GstPad * audio_src_pad = gst_element_get_static_pad (rtpmp4apay, "src");
+    GstPad * audio_src_pad = gst_element_get_static_pad (rtpmpapay, "src");
     gst_pad_link(audio_src_pad, audio_rtp_sink);
     gst_object_unref(audio_rtp_sink);
     gst_object_unref(audio_src_pad);
@@ -252,8 +252,8 @@ bool setup_pipline(appContext::context & cxt) {
     cxt.elements.push_back(pulsesrc);
     cxt.elements.push_back(audioconvert);
     cxt.elements.push_back(audioCapsFilter);
-    cxt.elements.push_back(voaacenc);
-    cxt.elements.push_back(rtpmp4apay);
+    cxt.elements.push_back(mp3enc);
+    cxt.elements.push_back(rtpmpapay);
 
     // AI pipeline elements
     cxt.elements.push_back(queue_ai);
