@@ -25,7 +25,6 @@ void parse_args(const int argc, char **argv) {
         program.parse_args(argc, argv);
         // load app context here
         cxt.url_location = program.get<std::string>("location"); // this is required
-        const auto ports = program.get<std::vector<int>>("-port");
         cxt.width = program.get<int>("-width");
         cxt.height = program.get<int>("-height");
         cxt.format = program.get<std::string>("-raw_format");
